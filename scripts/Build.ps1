@@ -2,14 +2,23 @@ param(
     [ValidateSet('Debug', 'Release')]
     [string]$Configuration = 'Release',
     [string]$SourceRevision = '',
-    [ValidatePattern('^\d+\.\d+\.\d+([-.][0-9A-Za-z.-]+)?$')]
-    [string]$Version = '0.1.0'
+    [string]$Version = ''
 )
 
 $ErrorActionPreference = 'Stop'
 $projectRoot = Split-Path -Parent $PSScriptRoot
+$projectPath = Join-Path $projectRoot 'src\AndChamps\AndChamps.csproj'
 $output = Join-Path $projectRoot 'artifacts\win-x64'
 $releaseOutput = Join-Path $projectRoot 'artifacts\release'
+
+if ([string]::IsNullOrWhiteSpace($Version)) {
+    $versionNode = Select-Xml -LiteralPath $projectPath -XPath '/Project/PropertyGroup/Version' |
+        Select-Object -First 1
+    $Version = $versionNode.Node.InnerText
+}
+if ($Version -notmatch '^\d+\.\d+\.\d+([-.][0-9A-Za-z.-]+)?$') {
+    throw "올바르지 않은 버전입니다: $Version"
+}
 
 if ([string]::IsNullOrWhiteSpace($SourceRevision)) {
     $SourceRevision = (& git -C $projectRoot rev-parse HEAD 2>$null)
@@ -32,7 +41,7 @@ function Remove-BuildDirectory([string]$Path) {
 Remove-BuildDirectory $output
 Remove-BuildDirectory $releaseOutput
 
-dotnet publish (Join-Path $projectRoot 'src\AndChamps\AndChamps.csproj') `
+dotnet publish $projectPath `
     --configuration $Configuration `
     --runtime win-x64 `
     --self-contained true `
