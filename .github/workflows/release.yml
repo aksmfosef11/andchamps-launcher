@@ -1,0 +1,50 @@
+name: Build verified release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+  id-token: write
+  attestations: write
+
+jobs:
+  release:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+      - name: Smoke tests
+        shell: pwsh
+        run: dotnet run --project tests/AndChamps.SmokeTests/AndChamps.SmokeTests.csproj --configuration Release
+      - name: Build from tagged source
+        shell: pwsh
+        run: |
+          $version = '${{ github.ref_name }}'.TrimStart('v')
+          ./scripts/Build.ps1 -Configuration Release -Version $version -SourceRevision '${{ github.sha }}'
+      - name: Verify manifest against tag commit
+        shell: pwsh
+        run: |
+          $zip = Get-ChildItem -LiteralPath artifacts/release -Filter '*.zip' | Select-Object -Single
+          ./scripts/Verify-Release.ps1 -ArtifactPath $zip.FullName -SourceRevision '${{ github.sha }}'
+      - name: Attest build provenance
+        uses: actions/attest-build-provenance@v3
+        with:
+          subject-path: artifacts/release/*.zip
+      - name: Publish GitHub release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $tag = '${{ github.ref_name }}'
+          $files = @(
+            (Get-ChildItem -LiteralPath artifacts/release -Filter '*.zip' | Select-Object -Single).FullName,
+            (Resolve-Path -LiteralPath artifacts/release/SHA256SUMS.txt).Path
+          )
+          gh release create $tag $files --verify-tag --generate-notes --title "AndChamps Launcher $tag"

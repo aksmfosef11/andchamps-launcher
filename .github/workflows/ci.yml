@@ -1,0 +1,24 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  build-and-test:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+      - name: Restore
+        run: dotnet restore AndChamps.sln
+      - name: Build
+        run: dotnet build AndChamps.sln --configuration Release --no-restore
+      - name: Smoke tests
+        run: dotnet run --project tests/AndChamps.SmokeTests/AndChamps.SmokeTests.csproj --configuration Release --no-build
