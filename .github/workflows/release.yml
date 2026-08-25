@@ -47,4 +47,9 @@ jobs:
             (Get-ChildItem -LiteralPath artifacts/release -Filter '*.zip' | Select-Object -Single).FullName,
             (Resolve-Path -LiteralPath artifacts/release/SHA256SUMS.txt).Path
           )
-          gh release create $tag $files --verify-tag --generate-notes --title "AndChamps Launcher $tag"
+          gh release view $tag *> $null
+          if ($LASTEXITCODE -eq 0) {
+            gh release upload $tag $files --clobber
+          } else {
+            gh release create $tag $files --verify-tag --generate-notes --title "AndChamps Launcher $tag"
+          }
