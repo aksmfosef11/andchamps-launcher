@@ -14,10 +14,10 @@ jobs:
   release:
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
-      - uses: actions/setup-dotnet@v4
+      - uses: actions/setup-dotnet@v6
         with:
           global-json-file: global.json
       - name: Smoke tests
@@ -31,7 +31,7 @@ jobs:
       - name: Verify manifest against tag commit
         shell: pwsh
         run: |
-          $zip = Get-ChildItem -LiteralPath artifacts/release -Filter '*.zip' | Select-Object -Single
+          $zip = Get-ChildItem -LiteralPath artifacts/release -Filter '*.zip' | Select-Object -First 1
           ./scripts/Verify-Release.ps1 -ArtifactPath $zip.FullName -SourceRevision '${{ github.sha }}'
       - name: Attest build provenance
         uses: actions/attest-build-provenance@v3
@@ -44,7 +44,7 @@ jobs:
         run: |
           $tag = '${{ github.ref_name }}'
           $files = @(
-            (Get-ChildItem -LiteralPath artifacts/release -Filter '*.zip' | Select-Object -Single).FullName,
+            (Get-ChildItem -LiteralPath artifacts/release -Filter '*.zip' | Select-Object -First 1).FullName,
             (Resolve-Path -LiteralPath artifacts/release/SHA256SUMS.txt).Path
           )
           gh release view $tag *> $null
