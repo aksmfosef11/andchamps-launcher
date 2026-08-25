@@ -1,0 +1,25 @@
+# Build and IDE output
+**/bin/
+**/obj/
+.vs/
+artifacts/
+TestResults/
+*.user
+
+# Local game packages and extracted proprietary content are never published.
+game/
+*.apk
+*.apks
+*.apkm
+*.xapk
+
+# Local diagnostics and machine-specific data
+andchamps-diagnostics.txt
+*.log
+*.dmp
+
+# OS/editor noise
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
