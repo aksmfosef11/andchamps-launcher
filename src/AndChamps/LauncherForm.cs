@@ -58,7 +58,7 @@ internal sealed class LauncherForm : Form
         };
         var preview = new Label
         {
-            Text = "GAME RUNTIME",
+            Text = $"v{typeof(LauncherForm).Assembly.GetName().Version?.ToString(3)} · GAME RUNTIME",
             AutoSize = true,
             Location = new Point(218, 23),
             Font = new Font("Segoe UI", 7.5F, FontStyle.Bold),
@@ -82,7 +82,7 @@ internal sealed class LauncherForm : Form
             BackColor = Color.Transparent,
             ForeColor = Color.FromArgb(62, 101, 190)
         };
-        _title.Text = "포켓몬 챔피언스를 PC에서";
+        _title.Text = "Android 게임을 PC에서";
         _title.AutoSize = true;
         _title.Location = new Point(60, 119);
         _title.Font = new Font("Segoe UI Semibold", 26F, FontStyle.Bold);
