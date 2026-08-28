@@ -1,6 +1,5 @@
 using System.Diagnostics;
 using System.Net.NetworkInformation;
-using System.Runtime.InteropServices;
 
 namespace AndChamps;
 
@@ -10,6 +9,7 @@ internal sealed class LaunchCoordinator(AppPaths paths)
 {
     public async Task<GameSession> RunAsync(IProgress<ProgressUpdate> progress,
         Func<CancellationToken, Task<SelectedGamePackage?>> selectPackage,
+        LaunchOptions options,
         CancellationToken cancellationToken)
     {
         SelectedGamePackage? selectedPackage = null;
@@ -31,30 +31,14 @@ internal sealed class LaunchCoordinator(AppPaths paths)
         await ProcessRunner.CaptureAsync(paths.AdbExe, ["start-server"], avd.EnvironmentVariables,
             cancellationToken, throwOnError: false);
         var emulator = ProcessRunner.Start(paths.EmulatorExe,
-        [
-            $"@{AvdManager.Name}",
-            "-port",
-            port.ToString(),
-            "-gpu",
-            "host",
-            "-no-window",
-            "-no-boot-anim",
-            "-no-metrics",
-            "-camera-back",
-            "none",
-            "-camera-front",
-            "none",
-            "-netdelay",
-            "none",
-            "-netspeed",
-            "full"
-        ], avd.EnvironmentVariables, createWindow: false);
+            BuildEmulatorArguments(port, options), avd.EnvironmentVariables, createWindow: false);
         Process? frontend = null;
 
         try
         {
+            frontend = await NativeEmulatorFrontend.WaitForWindowAsync(port, emulator, cancellationToken);
             await WaitForBootAsync(serial, emulator, avd.EnvironmentVariables, progress, cancellationToken);
-            await ApplyGameSettingsAsync(serial, avd.EnvironmentVariables, cancellationToken);
+            await ApplyGameSettingsAsync(serial, avd.EnvironmentVariables, options, cancellationToken);
             var installed = await GameInstaller.IsInstalledAsync(paths.AdbExe, serial, avd.EnvironmentVariables, cancellationToken);
             if (!installed)
             {
@@ -78,30 +62,17 @@ internal sealed class LaunchCoordinator(AppPaths paths)
                 }
             }
 
+            progress.Report(new ProgressUpdate("게임 실행 전 Play 스토어 예약 다운로드를 중지합니다."));
+            await CancelPlayStoreBackgroundJobsAsync(serial, avd.EnvironmentVariables, cancellationToken);
+
             progress.Report(new ProgressUpdate("게임을 실행합니다."));
             await GameInstaller.LaunchAsync(paths.AdbExe, serial, avd.EnvironmentVariables, cancellationToken);
 
             progress.Report(new ProgressUpdate("전용 게임 화면을 여는 중입니다…"));
             await WaitForGameSurfaceAsync(serial, avd.EnvironmentVariables, cancellationToken);
-            var frontendEnvironment = new Dictionary<string, string>(avd.EnvironmentVariables)
-            {
-                ["ADB"] = paths.AdbExe
-            };
-            frontend = ProcessRunner.Start(paths.ScrcpyExe,
-            [
-                "--serial",
-                serial,
-                "--window-title=게임 창 · 포챔스에뮬레이터",
-                "--window-width=1280",
-                "--window-height=720",
-                "--max-fps=60",
-                "--video-bit-rate=16M",
-                "--no-clipboard-autosync",
-                "--disable-screensaver",
-                "--no-terminal-title"
-            ], frontendEnvironment, createWindow: false);
-
-            await WaitForFrontendWindowAsync(frontend, cancellationToken);
+            await NativeEmulatorFrontend.ShowGameWindowAsync(frontend, cancellationToken);
+            await CancelPlayStoreBackgroundJobsAfterFrontendAsync(
+                serial, avd.EnvironmentVariables, cancellationToken);
             return new GameSession(emulator, frontend, paths.AdbExe, serial, avd.EnvironmentVariables);
         }
         catch
@@ -134,20 +105,7 @@ internal sealed class LaunchCoordinator(AppPaths paths)
         await ProcessRunner.CaptureAsync(paths.AdbExe, ["start-server"], avd.EnvironmentVariables,
             cancellationToken, throwOnError: false);
         var emulator = ProcessRunner.Start(paths.EmulatorExe,
-        [
-            $"@{AvdManager.Name}",
-            "-port",
-            port.ToString(),
-            "-gpu",
-            "host",
-            "-no-window",
-            "-no-boot-anim",
-            "-no-metrics",
-            "-camera-back",
-            "none",
-            "-camera-front",
-            "none"
-        ], avd.EnvironmentVariables, createWindow: false);
+            BuildHeadlessEmulatorArguments(port), avd.EnvironmentVariables, createWindow: false);
 
         try
         {
@@ -188,29 +146,6 @@ internal sealed class LaunchCoordinator(AppPaths paths)
         throw new TimeoutException("게임 화면을 30초 안에 열지 못했습니다.");
     }
 
-    private static async Task WaitForFrontendWindowAsync(Process frontend,
-        CancellationToken cancellationToken)
-    {
-        var deadline = DateTime.UtcNow.AddSeconds(30);
-        while (DateTime.UtcNow < deadline)
-        {
-            cancellationToken.ThrowIfCancellationRequested();
-            frontend.Refresh();
-            if (frontend.HasExited)
-                throw new InvalidOperationException(
-                    "게임 화면 프로그램이 창을 표시하기 전에 종료됐습니다. GPU 드라이버와 게임 실행 상태를 확인해 주세요.");
-
-            var window = frontend.MainWindowHandle;
-            if (window != nint.Zero && IsWindowVisible(window))
-                return;
-
-            await Task.Delay(TimeSpan.FromMilliseconds(100), cancellationToken);
-        }
-
-        throw new TimeoutException(
-            "게임 화면이 30초 안에 표시되지 않았습니다. GPU 드라이버와 게임 실행 상태를 확인해 주세요.");
-    }
-
     private async Task EnsureAccelerationAsync(CancellationToken cancellationToken)
     {
         var checker = Path.Combine(paths.Sdk, "emulator", "emulator-check.exe");
@@ -238,10 +173,6 @@ internal sealed class LaunchCoordinator(AppPaths paths)
         result.Contains("WHPX", StringComparison.OrdinalIgnoreCase)
         && result.Contains("is installed and usable", StringComparison.OrdinalIgnoreCase);
 
-    [DllImport("user32.dll")]
-    [return: MarshalAs(UnmanagedType.Bool)]
-    private static extern bool IsWindowVisible(nint window);
-
     private async Task WaitForBootAsync(string serial, Process emulator,
         IReadOnlyDictionary<string, string> environment,
         IProgress<ProgressUpdate> progress, CancellationToken cancellationToken)
@@ -265,48 +196,129 @@ internal sealed class LaunchCoordinator(AppPaths paths)
     }
 
     private async Task ApplyGameSettingsAsync(string serial, IReadOnlyDictionary<string, string> environment,
-        CancellationToken cancellationToken)
+        LaunchOptions options, CancellationToken cancellationToken)
     {
-        var commands = new[]
-        {
-            new[] { "shell", "settings", "put", "global", "window_animation_scale", "0" },
-            new[] { "shell", "settings", "put", "global", "transition_animation_scale", "0" },
-            new[] { "shell", "settings", "put", "global", "animator_duration_scale", "0" },
-            new[] { "shell", "settings", "put", "system", "peak_refresh_rate", "60.0" },
-            new[] { "shell", "settings", "put", "system", "min_refresh_rate", "60.0" },
-            new[] { "shell", "settings", "put", "secure", "location_mode", "0" },
-            new[] { "shell", "settings", "put", "secure", "immersive_mode_confirmations", "confirmed" },
-            new[] { "shell", "settings", "put", "global", "wifi_scan_always_enabled", "0" },
-            new[] { "shell", "settings", "put", "global", "ble_scan_always_enabled", "0" },
-            new[] { "shell", "settings", "put", "global", "mobile_data_always_on", "0" },
-            new[] { "shell", "cmd", "power", "set-fixed-performance-mode-enabled", "true" }
-        };
-        foreach (var command in commands)
+        foreach (var command in BuildGameSettingsCommands(options))
         {
             var args = new[] { "-s", serial }.Concat(command);
             await ProcessRunner.CaptureAsync(paths.AdbExe, args, environment, cancellationToken, throwOnError: false);
         }
 
-        string[] unusedPackages =
-        [
-            "com.android.camera2",
-            "com.google.android.apps.maps",
-            "com.google.android.apps.messaging",
-            "com.google.android.apps.photos",
-            "com.google.android.apps.wellbeing",
-            "com.google.android.apps.youtube.music",
-            "com.google.android.contacts",
-            "com.google.android.deskclock",
-            "com.google.android.dialer",
-            "com.google.android.youtube"
-        ];
-        foreach (var package in unusedPackages)
+        foreach (var package in UnusedAndroidPackages)
         {
             await ProcessRunner.CaptureAsync(paths.AdbExe,
                 ["-s", serial, "shell", "pm", "disable-user", "--user", "0", package],
                 environment, cancellationToken, throwOnError: false);
         }
     }
+
+    private Task CancelPlayStoreBackgroundJobsAsync(string serial,
+        IReadOnlyDictionary<string, string> environment, CancellationToken cancellationToken) =>
+        ProcessRunner.CaptureAsync(paths.AdbExe,
+            BuildCancelPlayStoreJobsArguments(serial),
+            environment, cancellationToken, throwOnError: false);
+
+    private async Task CancelPlayStoreBackgroundJobsAfterFrontendAsync(string serial,
+        IReadOnlyDictionary<string, string> environment, CancellationToken cancellationToken)
+    {
+        for (var pass = 0; pass < PlayStorePostFrontendCleanupPasses; pass++)
+        {
+            await CancelPlayStoreBackgroundJobsAsync(serial, environment, cancellationToken);
+            if (pass + 1 < PlayStorePostFrontendCleanupPasses)
+                await Task.Delay(PlayStorePostFrontendCleanupInterval, cancellationToken);
+        }
+    }
+
+    internal const int PlayStorePostFrontendCleanupPasses = 3;
+    internal static TimeSpan PlayStorePostFrontendCleanupInterval => TimeSpan.FromSeconds(6);
+
+    internal static string[] BuildCancelPlayStoreJobsArguments(string serial) =>
+        ["-s", serial, "shell", "cmd", "jobscheduler", "cancel", "-u", "0", "com.android.vending"];
+
+    internal static IReadOnlyList<string> UnusedAndroidPackages { get; } =
+    [
+        "com.android.camera2",
+        "com.google.android.apps.maps",
+        "com.google.android.apps.messaging",
+        "com.google.android.apps.photos",
+        "com.google.android.apps.restore",
+        "com.google.android.apps.wellbeing",
+        "com.google.android.apps.youtube.music",
+        "com.google.android.as",
+        "com.google.android.as.oss",
+        "com.google.android.contacts",
+        "com.google.android.deskclock",
+        "com.google.android.dialer",
+        "com.google.android.googlequicksearchbox",
+        "com.google.android.partnersetup",
+        "com.google.android.tts",
+        "com.google.android.youtube"
+    ];
+
+    internal static string[] BuildEmulatorArguments(int port, LaunchOptions options) =>
+    [
+        $"@{AvdManager.Name}",
+        "-port",
+        port.ToString(),
+        "-gpu",
+        "host",
+        "-no-snapshot",
+        "-skin",
+        $"{NativeEmulatorFrontend.ClientWidth}x{NativeEmulatorFrontend.ClientHeight}",
+        "-no-boot-anim",
+        "-no-metrics",
+        "-camera-back",
+        "none",
+        "-camera-front",
+        "none",
+        "-netdelay",
+        "none",
+        "-netspeed",
+        "full",
+        "-vsync-rate",
+        options.RefreshRate.ToString()
+    ];
+
+    internal static string[] BuildHeadlessEmulatorArguments(int port) =>
+    [
+        $"@{AvdManager.Name}",
+        "-port",
+        port.ToString(),
+        "-gpu",
+        "host",
+        "-no-snapshot",
+        "-no-window",
+        "-no-boot-anim",
+        "-no-metrics",
+        "-camera-back",
+        "none",
+        "-camera-front",
+        "none"
+    ];
+
+    internal static IReadOnlyList<string[]> BuildGameSettingsCommands(LaunchOptions options)
+    {
+        var refreshRate = $"{options.RefreshRate}.0";
+        return
+        [
+            ["shell", "settings", "put", "global", "window_animation_scale", "0"],
+            ["shell", "settings", "put", "global", "transition_animation_scale", "0"],
+            ["shell", "settings", "put", "global", "animator_duration_scale", "0"],
+            ["shell", "settings", "put", "system", "peak_refresh_rate", refreshRate],
+            ["shell", "settings", "put", "system", "min_refresh_rate", refreshRate],
+            ["shell", "settings", "put", "secure", "location_mode", "0"],
+            ["shell", "settings", "put", "secure", "immersive_mode_confirmations", "confirmed"],
+            ["shell", "settings", "put", "global", "wifi_scan_always_enabled", "0"],
+            ["shell", "settings", "put", "global", "ble_scan_always_enabled", "0"],
+            ["shell", "settings", "put", "global", "mobile_data_always_on", "0"],
+            ["shell", "cmd", "audio", "set-volume", "3", NativeMediaVolume.ToString()],
+            ["shell", "cmd", "power", "set-fixed-performance-mode-enabled", "true"]
+        ];
+    }
+
+    // Native Emulator audio honors the guest volume. Keep enough headroom and let
+    // the Windows output volume remain the user's final loudness control.
+    internal const int NativeMediaVolume = 10;
 
     private static int FindFreeEmulatorPort()
     {

@@ -28,7 +28,7 @@ internal static class Diagnostics
                 $"Latest emulator: {plan.Emulator.Version}",
                 $"Latest platform-tools: {plan.PlatformTools.Version}",
                 $"Pinned system image: {plan.SystemImage.Name} r{plan.SystemImage.Version.Major}",
-                $"Game window: scrcpy {plan.Scrcpy.Version}",
+                "Game window: Android Emulator native GPU surface",
                 $"First download: {plan.TotalSize / 1024d / 1024d:N0} MB"
             };
             var text = string.Join(Environment.NewLine, lines) + Environment.NewLine;

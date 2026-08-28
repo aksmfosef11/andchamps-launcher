@@ -265,7 +265,8 @@ internal sealed class LauncherForm : Form
         try
         {
             var coordinator = new LaunchCoordinator(new AppPaths());
-            using var session = await coordinator.RunAsync(progress, SelectGamePackageAsync, operation.Token);
+            var options = new LaunchOptions();
+            using var session = await coordinator.RunAsync(progress, SelectGamePackageAsync, options, operation.Token);
             _steps.ActiveIndex = 4;
             _progress.IsIndeterminate = false;
             _progress.Value = 1;

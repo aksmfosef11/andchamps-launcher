@@ -1,7 +1,7 @@
 # Third-party notices
 
-AndChamps Launcher의 저장소와 릴리스에는 게임 APK, Android SDK/Emulator,
-Google Play 시스템 이미지 또는 scrcpy 바이너리가 포함되지 않습니다.
+AndChamps Launcher의 저장소와 릴리스에는 게임 APK, Android SDK/Emulator 또는
+Google Play 시스템 이미지가 포함되지 않습니다.
 
 ## .NET 8
 
@@ -12,14 +12,6 @@ Windows용 자체 포함(single-file) 릴리스에는 .NET 런타임 및 Windows
 - License: https://github.com/dotnet/runtime/blob/main/LICENSE.TXT
 - Notices: https://github.com/dotnet/runtime/blob/main/THIRD-PARTY-NOTICES.TXT
 - Windows Desktop notices: https://github.com/dotnet/wpf/blob/main/THIRD-PARTY-NOTICES.TXT
-
-## scrcpy 4.1
-
-앱이 사용자의 동의 후 공식 GitHub 릴리스에서 직접 내려받습니다. 릴리스
-압축 파일에는 포함하지 않습니다. scrcpy는 Genymobile과 Romain Vimont의
-저작물이며 Apache License 2.0으로 제공됩니다.
-
-- Project and license: https://github.com/Genymobile/scrcpy
 
 ## Android SDK, Emulator and Google Play system image
 

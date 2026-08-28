@@ -9,12 +9,6 @@ internal sealed class RepositoryClient(HttpClient http)
     private static readonly Uri PlayImagesRepository = new("https://dl.google.com/android/repository/sys-img/google_apis_playstore/sys-img2-3.xml");
     private static readonly Uri MainBase = new("https://dl.google.com/android/repository/");
     private static readonly Uri PlayImagesBase = new("https://dl.google.com/android/repository/sys-img/google_apis_playstore/");
-    private static readonly RuntimePackage Scrcpy = new(
-        "scrcpy", new Version(4, 1),
-        new Uri("https://github.com/Genymobile/scrcpy/releases/download/v4.1/scrcpy-win64-v4.1.zip"),
-        11_305_298,
-        "5b12172b3264b2889f4583ee64752ce832e29bc8b1089dca81093459697165db");
-
     public async Task<RuntimePlan> ResolveLatestAsync(CancellationToken cancellationToken)
     {
         var mainXml = await http.GetStringAsync(MainRepository, cancellationToken);
@@ -27,7 +21,7 @@ internal sealed class RepositoryClient(HttpClient http)
         var systemImage = Resolve(images,
             "system-images;android-36;google_apis_playstore;x86_64", null, PlayImagesBase);
 
-        return new RuntimePlan(emulator, platformTools, systemImage, Scrcpy);
+        return new RuntimePlan(emulator, platformTools, systemImage);
     }
 
     private static RuntimePackage Resolve(XDocument document, string path, string? hostOs, Uri baseUri)

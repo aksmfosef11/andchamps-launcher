@@ -9,7 +9,6 @@ internal sealed class AppPaths
     public string AvdDirectory { get; }
     public string EmulatorExe => Path.Combine(Sdk, "emulator", "emulator.exe");
     public string AdbExe => Path.Combine(Sdk, "platform-tools", "adb.exe");
-    public string ScrcpyExe => Path.Combine(Sdk, "scrcpy-win64-v4.1", "scrcpy.exe");
     public string SystemImage => Path.Combine(Sdk, "system-images", "android-36", "google_apis_playstore", "x86_64");
 
     public AppPaths(string? rootOverride = null)

@@ -10,7 +10,7 @@
     <Product>포챔스에뮬레이터</Product>
     <RootNamespace>AndChamps</RootNamespace>
     <ApplicationManifest>app.manifest</ApplicationManifest>
-    <Version>0.1.1</Version>
+    <Version>0.1.2</Version>
     <Authors>AndChamps contributors</Authors>
     <Description>Windows launcher for a user-supplied Android game package.</Description>
     <RepositoryUrl>https://github.com/aksmfosef11/andchamps-launcher</RepositoryUrl>

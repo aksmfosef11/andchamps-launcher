@@ -9,8 +9,7 @@ internal sealed class RuntimeProvisioner(AppPaths paths)
 
     public bool IsReady => File.Exists(paths.EmulatorExe)
         && File.Exists(paths.AdbExe)
-        && File.Exists(Path.Combine(paths.SystemImage, "system.img"))
-        && File.Exists(paths.ScrcpyExe);
+        && File.Exists(Path.Combine(paths.SystemImage, "system.img"));
 
     public async Task EnsureAsync(IProgress<ProgressUpdate> progress, CancellationToken cancellationToken)
     {
@@ -25,8 +24,7 @@ internal sealed class RuntimeProvisioner(AppPaths paths)
         {
             (Package: plan.Emulator, Ready: File.Exists(paths.EmulatorExe)),
             (Package: plan.PlatformTools, Ready: File.Exists(paths.AdbExe)),
-            (Package: plan.SystemImage, Ready: File.Exists(Path.Combine(paths.SystemImage, "system.img"))),
-            (Package: plan.Scrcpy, Ready: File.Exists(paths.ScrcpyExe))
+            (Package: plan.SystemImage, Ready: File.Exists(Path.Combine(paths.SystemImage, "system.img")))
         };
 
         var pendingTotal = packages.Where(item => !item.Ready).Sum(item => item.Package.Size);
@@ -39,7 +37,6 @@ internal sealed class RuntimeProvisioner(AppPaths paths)
             var label = item.Package.Name.StartsWith("system-images", StringComparison.Ordinal)
                 ? "Android 16 경량 이미지"
                 : item.Package.Name == "emulator" ? "에뮬레이터 엔진"
-                : item.Package.Name == "scrcpy" ? "게임 전용 화면"
                 : "ADB 도구";
             var archive = Path.Combine(paths.Downloads, Path.GetFileName(item.Package.DownloadUri.LocalPath));
             await DownloadAsync(item.Package, archive, label, completed, pendingTotal, progress, cancellationToken);
@@ -59,8 +56,7 @@ internal sealed class RuntimeProvisioner(AppPaths paths)
             {
                 ("에뮬레이터", paths.EmulatorExe),
                 ("ADB", paths.AdbExe),
-                ("Android 시스템 이미지", Path.Combine(paths.SystemImage, "system.img")),
-                ("게임 화면", paths.ScrcpyExe)
+                ("Android 시스템 이미지", Path.Combine(paths.SystemImage, "system.img"))
             }.Where(item => !File.Exists(item.Item2)).Select(item => item.Item1);
             throw new InvalidDataException(
                 $"Android 런타임 설치가 완전하지 않습니다. 누락: {string.Join(", ", missing)}");
